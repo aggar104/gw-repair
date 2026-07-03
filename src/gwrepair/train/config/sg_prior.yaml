@@ -1,0 +1,51 @@
+class_path: amplfi.train.prior.AmplfiPrior
+init_args:
+  priors:
+    N: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 5
+        high: 15
+        validate_args: false
+    tw: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: -2
+        high: -1
+        validate_args: false
+    fc: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 10
+        high: 450
+        validate_args: false
+    fw:
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 10
+        high: 200
+        validate_args: false
+    quality:
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 4
+        high: 25
+        validate_args: false
+    hrss: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 2e-24
+        high: 2e-22
+        validate_args: false
+    phase: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 0
+        high: 6.28
+        validate_args: false
+    eccentricity: 
+      class_path: torch.distributions.Uniform
+      init_args:
+        low: 0
+        high: 1
+        validate_args: false

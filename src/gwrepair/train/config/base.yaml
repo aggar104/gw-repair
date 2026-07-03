@@ -1,0 +1,31 @@
+data:
+  duration: 5
+  sample_rate: 2048
+  device: "cpu"
+  data_dir: ${oc.env:DATA_DIR}
+  ifos: ["H1", "L1"]
+  fduration: 2
+  psd_length: 132
+  fftlength: 2
+  f_min: 20
+  batch_size: 10
+  batches_per_epoch: 2
+  num_val_samples: 12
+  num_test_samples: 30
+  waveform_snr: [20, 80]
+  glitch_snr: [50, 80]
+  whiten: True
+  logger: null
+waveform:
+  prior: ${oc.env:CONFIG_DIR}/prior.yaml
+  right_pad: 1
+  jitter: 0.1
+  approximant: null
+  extrinsic_priors: null
+  f_ref: 25
+glitch:
+  prior: ${oc.env:CONFIG_DIR}/sg_prior.yaml
+  avoid_time: 0.1
+  include_time: 1
+  f_min: 20
+
