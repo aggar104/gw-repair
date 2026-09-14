@@ -11,7 +11,7 @@ from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
 
 from gwrepair.train.data.signals import WaveformSampler, GlitchSampler
-from gwrepair.train.data.clusterglitch import ClusterGlitchSampler
+from gwrepair.train.data.clusterglitch import MultiClusterGlitchSampler
     
 class RepairDataset:
 
@@ -37,6 +37,8 @@ class RepairDataset:
         waveform_snr: List[float] | None = None,
         glitch_snr: List[float] | None = None,
         whiten: bool = True,
+        mute_waveform: bool = False,
+        mute_glitch: bool = False,
     ):
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
@@ -55,6 +57,8 @@ class RepairDataset:
         self.waveform_snr = waveform_snr
         self.glitch_snr = glitch_snr
         self.whiten = whiten
+        self.mute_waveform = mute_waveform
+        self.mute_glitch = mute_glitch
 
         ## signal generators
         right_pad = right_pad + fduration / 2
@@ -69,9 +73,11 @@ class RepairDataset:
         glitch_args["fduration"] = fduration
         glitch_args["right_pad"] = right_pad
         glitch_args["device"] = device
+
+        num = torch.distributions.Geometric(probs=0.5, )
         
         self.waveform_gen = WaveformSampler(**waveform_args)
-        self.glitch_gen = ClusterGlitchSampler(**glitch_args)
+        self.glitch_gen = MultiClusterGlitchSampler(num=num, **glitch_args)
             
     def log(self, msg):
         if self.logger:
@@ -99,7 +105,7 @@ class RepairDataset:
             window = None,
             fast = True,
         )
-        self.psd_splits = [self.signal_kernel, self.psd_kernel]
+        self.psd_splits = [self.psd_kernel, self.signal_kernel]
         
         self.whitener_tool = Whiten(
             fduration = self.fduration,
@@ -129,14 +135,21 @@ class RepairDataset:
             X = X.to(self.device)
 
         ## make psd
-        X, psd_X = torch.split(X, self.psd_splits, dim=-1)
+        psd_X, X = torch.split(X, self.psd_splits, dim=-1)
         psds = self.spectral_density(psd_X.double().to(self.device))
-        psd_X = psd_X[..., :X.shape[-1]]
 
-        ## make injections    
-        waveform, params, jitters = self.waveform_gen(X)
+        ## make injections
+        if self.mute_waveform:
+            waveform = torch.zeros_like(X)
+            params = {"distance":  torch.zeros_like(X)}
+            scale = torch.ones_like(X).unsqueeze(0).unsqueeze(0)
+            jitters = 0
+        else:
+            waveform, params, jitters = self.waveform_gen(X)
+            waveform, scale = self.rescale_snr(waveform, psds, self.waveform_snr)
+
+        
         glitch = self.glitch_gen(X)
-        waveform, scale = self.rescale_snr(waveform, psds, self.waveform_snr)
         glitch, _ = self.rescale_snr(glitch, psds, self.glitch_snr, ifos=1)
 
         if step == "train":
@@ -171,12 +184,18 @@ class RepairDataset:
             parameters["snrs"] = {"waveform":waveform_snr, "glitch": glitch_snr}
             parameters["jitters"] = jitters
 
+            ## optional mmuting:
+            if self.mute_waveform:
+                waveform = torch.zeros_like(X)
+            if self.mute_glitch:
+                glitch = torch.zeros_like(X)
+
             ##inject and whiten
             X = X + waveform + glitch
             X_ = self.whitener(X, psds)
             waveform_ = self.whitener(waveform, psds)
             glitch_ = self.whitener(glitch, psds)
-            psd_X_ = self.whitener(psd_X, psds)
+            psd_X_ = torch.zeros_like(X_)
 
             ## prepare unwhitened data
             crop = int(self.fduration / 2 * self.sample_rate)
@@ -205,7 +224,7 @@ class RepairDataset:
         if net:
             snrs = snrs.sum(axis=-1) ** 0.5
         else:
-            snrs = torch.min(snrs[:, 0:ifos], dim=-1).values
+            snrs = (snrs[:, 0])
         return snrs
         
     def rescale_snr(self, S, psds, snr_range, ifos=None):

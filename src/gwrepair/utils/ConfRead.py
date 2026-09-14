@@ -12,7 +12,7 @@ def ReadConfigs(HOME_DIR="/Users/shreyaggarwal/Desktop/work/git", DATA_DIR=None,
     PIPELINE_DIR = HOME_DIR + "/gw-repair"
 
     
-    os.environ["DATA_DIR"] =  DATA_DIR or f"{HOME_DIR}/data/sr2048Hz/train/background"
+    os.environ["DATA_DIR"] =  DATA_DIR or f"{HOME_DIR}/data/background"
     os.environ["CONFIG_DIR"] = CONFIG_DIR or PIPELINE_DIR + "/src/gwrepair/train/config"
 
     config = dict(OmegaConf.load(

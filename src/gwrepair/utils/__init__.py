@@ -1,5 +1,5 @@
 from .logg import prepare_train_dir, log_metrics_csv
 from .ConfRead import ReadConfigs
-from .BilbyData import BilbyLogL
+from .prediction import repair
 
-__all__ = ["prepare_train_dir", "log_metrics_csv", "ReadConfigs", "BilbyLogL"]
+__all__ = ["prepare_train_dir", "log_metrics_csv", "ReadConfigs", "repair"]

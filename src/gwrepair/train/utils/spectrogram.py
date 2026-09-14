@@ -21,7 +21,7 @@ class stft_module(torch.nn.Module):
         self.register_buffer('window', torch.hann_window(win))
         self.data_module = data_module
 
-    def stft(self, x: torch.tensor, return_phase=False):
+    def stft(self, x: torch.tensor, return_phase=False, ret_complex=False):
 
         flattened = False
         if x.dim() == 3:
@@ -40,9 +40,13 @@ class stft_module(torch.nn.Module):
             pad_mode="reflect",
         )
 
+
         if flattened:
             F, TT = X.shape[-2], X.shape[-1]
             X = X.reshape(N, C, F, TT)
+
+        if ret_complex:
+            return X
 
         if return_phase:
             return X.abs(), torch.angle(X)
@@ -115,7 +119,7 @@ class stft_module(torch.nn.Module):
             ##strain stfts
             ts_signal, ts_waveform, ts_glitch, ts_background = strain
 
-            ts_signal = ts_signal*window
+            ts_signal = ts_signal
             
             stft_signal, phase = self.stft(ts_signal, return_phase=True)
             stft_waveform = self.stft(ts_waveform)

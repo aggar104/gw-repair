@@ -17,13 +17,13 @@ init_args:
       class_path: torch.distributions.Uniform
       init_args:
         low: 10
-        high: 450
+        high: 800
         validate_args: false
-    fw:
+    lg_fw:
       class_path: torch.distributions.Uniform
       init_args:
-        low: 10
-        high: 200
+        low: 1
+        high: 2.8
         validate_args: false
     quality:
       class_path: torch.distributions.Uniform

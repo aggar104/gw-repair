@@ -6,20 +6,20 @@ data:
   ifos: ["H1", "L1"]
   fduration: 2
   psd_length: 132
-  fftlength: 2
+  fftlength: 5
   f_min: 20
-  batch_size: 10
-  batches_per_epoch: 2
-  num_val_samples: 12
-  num_test_samples: 30
-  waveform_snr: [20, 80]
-  glitch_snr: [50, 80]
+  batch_size: 100
+  batches_per_epoch: 20
+  num_val_samples: 200
+  num_test_samples: 100
+  waveform_snr: [20, 70]
+  glitch_snr: [20, 70]
   whiten: True
   logger: null
 waveform:
   prior: ${oc.env:CONFIG_DIR}/prior.yaml
   right_pad: 1
-  jitter: 0.1
+  jitter: 0 #0.1
   approximant: null
   extrinsic_priors: null
   f_ref: 25

@@ -43,13 +43,11 @@ class GlitchParameterSampler:
     def __init__(
         self, 
         prior_file: str,
-        device = "cpu",
         fmin: float = 32,
     ):
-        self.level1 = ["N", "fc", "fw", "tw"]
+        self.level1 = ["N", "fc", "lg_fw", "tw"]
         self.level2 = ["quality", "phase", "hrss", "eccentricity"]
         self.priors = get_prior(prior_file)
-        self.device = device
         self.f_min = fmin
 
     def __call__(self, X, level=1):
@@ -58,10 +56,13 @@ class GlitchParameterSampler:
             
             B = X.shape[0]
             params = {
-                k: v.sample((B,)).to(self.device)
+                k: v.sample((B,))
                 for k, v in self.priors.items()
                 if k in self.level1
             }
+
+            params["fw"] = 10**(params["lg_fw"])
+            params.pop("lg_fw")
             return params
 
         else:
@@ -78,11 +79,11 @@ class GlitchParameterSampler:
             frequency_prior = torch.distributions.Uniform(fmin, fmax)
 
             params = {
-                k: v.sample((N,)).to(self.device)
+                k: v.sample((N,))
                 for k, v in self.priors.items()
                 if k in self.level2
             }
-            params["frequency"] = frequency_prior.sample((N,)).to(self.device)
+            params["frequency"] = frequency_prior.sample((N,))
 
             return params
 def time_shift(x, shifts):
@@ -152,7 +153,7 @@ class ClusterGlitchSampler(torch.nn.Module):
 
         self.length = int(sample_rate * duration)   
         self.parameter_sampler = GlitchParameterSampler(
-            prior, device, f_min
+            prior, f_min
         )
         self.generator = SineGaussian(
             sample_rate = sample_rate,
@@ -226,7 +227,47 @@ class ClusterGlitchSampler(torch.nn.Module):
         l1_params = self.parameter_sampler(X)
 
         return self.wavelets(X, l1_params)
+
+
+class MultiClusterGlitchSampler(ClusterGlitchSampler):
+    def __init__(
+        self, 
+        *args,
+        num: torch.distributions.Distribution|None = None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.num = num
+
+    def forward(self, X):
+
+        B, C, T = X.shape
+        device = X.device
+
+        if self.num is not None:
+            N = self.num.sample((B,)).to(device)+1
+        else:
+            N = torch.ones(B).to(device)
+            
+        N = N.to(torch.int)
+        num_glitches = N.sum().to(torch.int)
+            
+        glitch = torch.zeros_like(X)
         
+        X_N = torch.zeros(num_glitches, C, T).to(X.device)
+        l1_params = self.parameter_sampler(X_N)
+        glitches = self.wavelets(X_N, l1_params)
+
+        glitch = torch.zeros_like(X)
+
+        j=0
+        for i, num in zip(range(B), N):
+
+            for n in range(num):
+                glitch[i] += glitches[j]
+                j += 1
+        
+        return glitch
 
             
 

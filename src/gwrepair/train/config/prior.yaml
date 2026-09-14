@@ -5,7 +5,7 @@ init_args:
     chirp_mass: 
       class_path: torch.distributions.Uniform
       init_args:
-        low: 20
+        low: 10
         high: 80
         validate_args: false
     mass_ratio: 
@@ -17,8 +17,8 @@ init_args:
     distance: 
       class_path: torch.distributions.Uniform
       init_args:
-        low:  1000
-        high:  3000
+        low:  100
+        high:  3100
         validate_args: false
     inclination: 
       class_path: ml4gw.distributions.Sine

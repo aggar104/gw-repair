@@ -61,7 +61,7 @@ def compute_loss(pred, injection, stft_X, eps: float = 1e-8):
 
     norm = (injection.float() * obs).abs().sum(dim=(1, 2, 3)) + eps
 
-    return (residual / norm).mean() * 10
+    return (residual / norm).mean() * 100
 
 
 def run_validation(stft_X, stft_mask, model, cfg, device, epoch=-1):
