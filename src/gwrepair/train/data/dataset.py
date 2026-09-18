@@ -222,7 +222,7 @@ class RepairDataset:
         )
 
         if net:
-            snrs = snrs.sum(axis=-1) ** 0.5
+            snrs = (snrs**2).sum(axis=-1) ** 0.5
         else:
             snrs = (snrs[:, 0])
         return snrs

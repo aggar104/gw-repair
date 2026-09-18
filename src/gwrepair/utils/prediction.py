@@ -8,7 +8,7 @@ from gwrepair.train.models import AttentionUNet2D
 from gwrepair.utils import ReadConfigs
 from gwrepair.train.data.dataset import RepairDataset
 from gwrepair.train.utils import stft_module
-from gwrepair.utils.RemoveMask import roll_replace_complex_stft
+from gwrepair.utils.MaskReplacement import ReplaceSTFT
 
 @dataclass
 class TrainConfig:
@@ -55,7 +55,7 @@ def data_modules(
 
 def repair(
     X: torch.tensor,
-    psds: torch.tensor,
+    psd_X: torch.tensor,
     ckpts_path: Path | None = None,
     cfg: TrainConfig = TrainConfig,
     dataset: RepairDataset | None = None,
@@ -64,6 +64,8 @@ def repair(
     sample_rate: float = 2048,
     return_whitned: bool = True,
     context=20,
+    max_search: int = 250,
+    split_complex: bool = False,
     plot = None,
 ):
     ## modules ##
@@ -73,8 +75,11 @@ def repair(
     glitch_model, waveform_model = load_models(cfg)
     
     ## transorm data ##
+    psds = dataset.spectral_density(psd_X)
+    B = psd_X[..., -X.shape[-1]:]
+    stft_B = spectogram.stft(B, ret_complex=True)
+    
     X_ = dataset.whitener(X, psds)
-
     stft_X = spectogram.stft(X, ret_complex=True)
     stft_X_ = spectogram.stft(X_).abs()
 
@@ -107,14 +112,16 @@ def repair(
     glitch_mask[..., crop:-crop] = glitch_mask_
     waveform_mask[..., crop:-crop] = waveform_mask_
 
-    if plot is not None:
-
-        fig, ax = plt.subplots(1, figsize=(15, 5))
-        #plot_timeseries([X_, waveform_, glitch_], c=['gray', 'b', 'r'], alpha=[None, 0.5, 0.5], labels=["X", "waveform", "glitch"], ax=ax[0], i=plot)
-        plot_stfts(stft_X_, [glitch_mask_, waveform_mask_], ax=ax, i=plot)
-
     ## replace mask
-    pred_stft, overlap = roll_replace_complex_stft(stft_X, glitch_mask, waveform_mask, context=context)
+    pred_stft = ReplaceSTFT(
+        stft_X,
+        stft_B,
+        glitch_mask,
+        waveform_mask,
+        context = context,
+        max_search = max_search,
+        split_complex = split_complex,
+    )
 
     ## transform prediction
     ts_pred = spectogram.istft(pred_stft.abs(), torch.angle(pred_stft))
@@ -122,14 +129,14 @@ def repair(
     if return_whitned:
         ts_pred_ = dataset.whitener(ts_pred, psds)
         stft_pred_ = spectogram.stft(ts_pred_)
-        return (ts_pred, ts_pred_, stft_pred_), (glitch_mask, waveform_mask, overlap)
+        return (ts_pred, ts_pred_, stft_pred_), (glitch_mask, waveform_mask)
         
     else:
-        return ts_pred, (glitch_mask, waveform_mask, overlap)
+        return ts_pred, (glitch_mask, waveform_mask)
 
 def repair_whitened(
-    X_: torch.tensor,
-    B_: torch.tensor,
+    X: torch.tensor,
+    psd_X: torch.tensor,
     ckpts_path: Path | None = None,
     cfg: TrainConfig = TrainConfig,
     dataset: RepairDataset | None = None,
@@ -138,6 +145,8 @@ def repair_whitened(
     sample_rate: float = 2048,
     return_whitned: bool = True,
     context=20,
+    max_search: int = 250,
+    split_complex: bool = False,
     plot = None,
 ):
     ## modules ##
@@ -145,9 +154,11 @@ def repair_whitened(
     if ckpts_path is not None:
         cfg.ckpts_path = ckpts_path
     glitch_model, waveform_model = load_models(cfg)
-
-    stft_X_ = spectogram.stft(X_, ret_complex=True)
-    stft_B_ = spectogram.stft(B_, ret_complex=True)
+    
+    ## transorm data ##
+    B = psd_X[..., -X.shape[-1]:]
+    stft_B = spectogram.stft(B, ret_complex=True)
+    stft_X = spectogram.stft(X, ret_complex=True)
 
     ## predict mask ##
     device = torch.device('cpu')
@@ -158,15 +169,32 @@ def repair_whitened(
             enabled=(True and device.type == "cuda")
         ):
     
-            glitch_mask_ = glitch_model(stft_X_.abs())
-            waveform_mask_ = waveform_model(stft_X_.abs())
+            glitch_mask_ = glitch_model(stft_X.abs())
+            waveform_mask_ = waveform_model(stft_X.abs())
 
     threshold = 0.5
-    glitch_mask = (glitch_mask_ >= threshold).float()
-    waveform_mask = (waveform_mask_ >= threshold).float()
+    glitch_mask_ = (glitch_mask_ >= threshold).float()
+    waveform_mask_ = (waveform_mask_ >= threshold).float()
 
-    mask = glitch_mask * (1- waveform_mask)
+    ## remove > f_min mask and pad
+    df = sample_rate // spectogram.n_fft
+    f_low = int(f_min // df)
+    glitch_mask_[:, :, :f_low] = torch.zeros_like(glitch_mask_[:, :, :f_low])
+    waveform_mask_[:, :, :f_low] = torch.zeros_like(glitch_mask_[:, :, :f_low])
 
-    pred_stft, overlap = roll_replace_complex_stft(stft_X_, glitch_mask, waveform_mask, context=context, search_width=50)
+    ## replace mask
+    pred_stft = ReplaceSTFT(
+        stft_X,
+        stft_B,
+        glitch_mask_,
+        waveform_mask_,
+        context = context,
+        max_search = max_search,
+        split_complex = split_complex,
+    )
 
-    return pred_stft
+    ## transform prediction
+    ts_pred = spectogram.istft(pred_stft.abs(), torch.angle(pred_stft))
+    
+        
+    return ts_pred, (glitch_mask_, waveform_mask_)

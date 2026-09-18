@@ -234,10 +234,12 @@ class MultiClusterGlitchSampler(ClusterGlitchSampler):
         self, 
         *args,
         num: torch.distributions.Distribution|None = None,
+        separate: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.num = num
+        self.separate = separate
 
     def forward(self, X):
 
@@ -260,12 +262,20 @@ class MultiClusterGlitchSampler(ClusterGlitchSampler):
 
         glitch = torch.zeros_like(X)
 
+        separate_glitches = []
+
         j=0
         for i, num in zip(range(B), N):
 
+            separate_glitches.append([])
+
             for n in range(num):
                 glitch[i] += glitches[j]
+                separate_glitches[-1].append(glitches[j])
                 j += 1
+
+        if self.separate:
+            return glitch, separate_glitches
         
         return glitch
 
